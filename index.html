@@ -277,14 +277,17 @@ main{max-width:1120px;margin:0 auto;padding:1.6rem 1.2rem 4rem}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
+  // Mesmo projeto Firebase do formulário público (fir-46274) — precisa ser
+  // IDÊNTICO ao que está em denuncia-mulher.html, senão o painel não
+  // consegue ver as denúncias enviadas por lá.
   const firebaseConfig = {
-    apiKey: "AIzaSyDVIKbfNVw4_iQGdiLrJhRfcPSVNjeZDLU",
-    authDomain: "comando-geral-98c87.firebaseapp.com",
-    databaseURL: "https://comando-geral-98c87-default-rtdb.firebaseio.com",
-    projectId: "comando-geral-98c87",
-    storageBucket: "comando-geral-98c87.firebasestorage.app",
-    messagingSenderId: "744810462465",
-    appId: "1:744810462465:web:075ce2c6fdad28e6b1ef00"
+    apiKey: "AIzaSyBxtNGd2Gwi4KB-md_wQE4WdaDFJ43tXtc",
+    authDomain: "fir-46274.firebaseapp.com",
+    databaseURL: "https://fir-46274-default-rtdb.firebaseio.com",
+    projectId: "fir-46274",
+    storageBucket: "fir-46274.firebasestorage.app",
+    messagingSenderId: "1058624496135",
+    appId: "1:1058624496135:web:b24174326134715e66c0a2"
   };
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
@@ -507,6 +510,21 @@ main{max-width:1120px;margin:0 auto;padding:1.6rem 1.2rem 4rem}
     imgModalBg.classList.add("show");
   }
   window.abrirImagem = abrirImagem;
+
+  // Abre o anexo de uma denúncia já carregada em memória (allDenuncias),
+  // em vez de receber o base64 duplicado no HTML do onclick — evita inflar
+  // a página com o mesmo arquivo gigante duas vezes.
+  function abrirImagemAnexo(denunciaId, index){
+    const d = allDenuncias.find(x => x.id === denunciaId);
+    if(!d || !Array.isArray(d.anexos)) return;
+    const a = d.anexos[index];
+    if(!a) return;
+    const inline = typeof a === "object" && a.inline;
+    const url = typeof a === "string" ? a : (inline ? a.data : a.url);
+    const tipo = typeof a === "string" ? "imagem" : (a.tipo || "imagem");
+    abrirImagem(url, tipo);
+  }
+  window.abrirImagemAnexo = abrirImagemAnexo;
 </script>
 
 <script>
@@ -640,13 +658,19 @@ main{max-width:1120px;margin:0 auto;padding:1.6rem 1.2rem 4rem}
         ${d.local ? `<div class="item-field"><b>Local/contexto:</b> ${escapeHtml(d.local)}</div>` : ''}
         ${!d.anonima && d.contato ? `<div class="item-field"><b>Contato para retorno:</b> ${escapeHtml(d.contato)}</div>` : ''}
         <div class="item-message">${escapeHtml(d.message || "")}</div>
-        ${anexos.length ? `<div class="item-thumbs">${anexos.map(a => {
-          // Compatibilidade: denúncias antigas salvaram os anexos como string (url pura).
-          const url = typeof a === "string" ? a : a.url;
+        ${anexos.length ? `<div class="item-thumbs">${anexos.map((a,ai) => {
+          // Compatibilidade com formatos antigos:
+          //  - string pura = era só a url (formato bem antigo)
+          //  - {url, tipo} = veio do Firebase Storage normalmente
+          //  - {data, tipo, inline:true} = veio pelo plano B (base64 salvo
+          //    direto no banco, usado quando o Storage está indisponível)
+          const inline = typeof a === "object" && a.inline;
+          const url = typeof a === "string" ? a : (inline ? a.data : a.url);
           const tipo = typeof a === "string" ? "imagem" : (a.tipo || "imagem");
+          const badgeInline = inline ? '<div class="vid-badge" style="bottom:auto;top:3px;right:3px;left:auto">alt.</div>' : '';
           return tipo === "video"
-            ? `<div class="thumb-wrap"><video src="${url}" muted onclick="abrirImagem('${url}','video')"></video><div class="vid-badge">▶ vídeo</div></div>`
-            : `<img src="${url}" alt="Print anexado" onclick="abrirImagem('${url}','imagem')">`;
+            ? `<div class="thumb-wrap"><video src="${url}#t=0.3" muted preload="metadata" playsinline onloadeddata="this.currentTime=0.3" onerror="this.closest('.thumb-wrap').querySelector('.vid-badge').textContent='⚠️ não carregou'" onclick="abrirImagemAnexo('${d.id}',${ai})"></video><div class="vid-badge">▶ vídeo</div>${badgeInline}</div>`
+            : `<div class="thumb-wrap"><img src="${url}" alt="Print anexado" onclick="abrirImagemAnexo('${d.id}',${ai})">${badgeInline}</div>`;
         }).join("")}</div>` : ''}
         <div class="item-meta">
           <span>${ICO.globe} IP: <code>${escapeHtml(d.ip || "-")}</code></span>
